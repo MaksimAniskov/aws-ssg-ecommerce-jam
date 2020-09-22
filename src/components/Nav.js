@@ -8,8 +8,8 @@ import { SiteContext, ContextProviderComponent } from '../context/mainContext'
 
 class Nav extends React.Component {
   render() {
-    let { numberOfItemsInCart, navItems: { navInfo: { data: links }}} = this.props.context
-
+    let { numberOfItemsInCart, shopData: { navInfo: { data: links }}} = this.props.context
+  
     links = links.map(link => {
       const newLink = {}
       newLink.link = slugify(link)

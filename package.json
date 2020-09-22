@@ -1,9 +1,12 @@
 {
-  "name": "gatsby-ecommerce-professional",
+  "name": "aws-ssg-ecommerce-jam",
   "private": true,
-  "description": "An E Commerce starter for Gatsby",
+  "description": "An SSG e-Commerce Solution on AWS",
   "version": "0.1.0",
-  "author": "Nader Dabit <dabit3@gmail.com>",
+  "contributors": [
+    "Nader Dabit <dabit3@gmail.com>",
+    "Maksim Aniskov <maksimaniskov@gmail.com> (https://linkedin.com/in/MaksimAniskov/)"
+  ],
   "dependencies": {
     "@stripe/react-stripe-js": "^1.0.0-beta.6",
     "@stripe/stripe-js": "^1.0.0-beta.8",
@@ -16,8 +19,10 @@
     "gatsby-plugin-manifest": "^2.2.39",
     "gatsby-plugin-offline": "^2.2.10",
     "gatsby-plugin-postcss": "^2.1.19",
+    "gatsby-plugin-preload-fonts": "^1.2.20",
     "gatsby-plugin-react-helmet": "^3.1.21",
     "gatsby-plugin-sharp": "^2.4.3",
+    "gatsby-plugin-static-folders": "^1.0.1",
     "gatsby-plugin-stripe": "^1.2.3",
     "gatsby-plugin-web-font-loader": "^1.0.4",
     "gatsby-source-filesystem": "^2.1.46",
@@ -32,8 +37,9 @@
     "react-helmet": "^5.2.1",
     "react-icons": "^3.9.0",
     "react-toastify": "^5.5.0",
-    "reactjs-popup": "^1.5.0",
-    "tailwindcss": "^1.1.4",
+    "rimraf": "^3.0.2",
+    "sharp-cli": "^1.14.1",
+    "tailwindcss": "^1.6.0",
     "uuid": "^3.4.0"
   },
   "devDependencies": {
@@ -44,19 +50,22 @@
   ],
   "license": "MIT",
   "scripts": {
-    "build": "gatsby build",
+    "build": "npm run build:images && npm run build:gatsby",
+    "build:gatsby": "gatsby build",
+    "build:images": "mkdir optimized_images -p && ./node_modules/.bin/sharp resize 612 -i ./shop/productimages/* -o ./optimized_images/{name}_w612.webp -f webp && ./node_modules/.bin/sharp resize 576 -i ./shop/productimages/* -o ./optimized_images/{name}_w576.webp -f webp && ./node_modules/.bin/sharp resize 200 -i ./shop/productimages/* -o ./optimized_images/{name}_w200.webp -f webp && ./node_modules/.bin/sharp resize 130 -i ./shop/productimages/* -o ./optimized_images/{name}_w130.webp -f webp",
     "develop": "gatsby develop",
+    "package": "zip -FSr deployment-package.zip providers src static utils *.js package.json yarn.lock",
     "format": "prettier --write \"**/*.{js,jsx,json,md}\"",
     "start": "npm run develop",
     "serve": "gatsby serve",
-    "clean": "gatsby clean",
+    "clean": "gatsby clean && ./node_modules/.bin/rimraf optimized_images",
     "test": "echo \"Write tests! -> https://gatsby.dev/unit-testing\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/dabit3/gatsby-ecommerce-professional"
+    "url": "https://github.com/MaksimAniskov/aws-ssg-ecommerce"
   },
   "bugs": {
-    "url": "https://github.com/dabit3/gatsby-ecommerce-professional/issues"
+    "url": "https://github.com/MaksimAniskov/aws-ssg-ecommerce/issues"
   }
 }

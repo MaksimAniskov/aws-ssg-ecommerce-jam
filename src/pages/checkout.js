@@ -1,11 +1,12 @@
 import React, { useState } from "react"
+import { CountryDropdown } from 'react-country-region-selector';
 
 import { SiteContext, ContextProviderComponent } from "../context/mainContext"
-import { DENOMINATION } from "../../providers/inventoryProvider"
+import { calculateShippingCost } from "../../providers/shippingCostProvider"
 import { FaLongArrowAltLeft } from "react-icons/fa"
 import { Link } from "gatsby"
 import Image from "../components/Image"
-import uuid from "uuid/v4"
+import { backendUrl } from "../../settings.json"
 
 import {
   CardElement,
@@ -15,26 +16,39 @@ import {
 } from "@stripe/react-stripe-js"
 import { loadStripe } from "@stripe/stripe-js"
 
+import { DENOMINATION, stripe } from '../../providers/shopSettingsProvider'
+
 // Make sure to call `loadStripe` outside of a component’s render to avoid
 // recreating the `Stripe` object on every render.
-const stripePromise = loadStripe("pk_test_DvXwcKnVaaZUpWJIbh9cjgZr00IjIAjZAA")
+let stripePromise
+if (stripe && stripe.publicKey) {
+  stripePromise = loadStripe(stripe.publicKey)
+}
+
+const Error = ({ message }) =>  (
+  <div className="ml-4 mt-4">
+    {message}
+  </div>
+)
 
 function CheckoutWithContext(props) {
   return (
     <ContextProviderComponent>
       <SiteContext.Consumer>
         {context => (
-          <Elements stripe={stripePromise}>
-            <Checkout {...props} context={context} />
-          </Elements>
+          stripe && stripe.publicKey ? (
+              <Elements stripe={stripePromise}>
+                <Checkout {...props} context={context} />
+              </Elements>
+            ) : (
+              <div className="ml-4 mt-4">
+                {<Error message="Stripe is not configured"/>}
+               </div>
+            )
         )}
       </SiteContext.Consumer>
     </ContextProviderComponent>
   )
-}
-
-const calculateShipping = () => {
-  return 0
 }
 
 const Input = ({ onChange, value, name, placeholder }) => (
@@ -49,16 +63,20 @@ const Input = ({ onChange, value, name, placeholder }) => (
 )
 
 const Checkout = ({ context }) => {
+  const [inProgress, setInProgress] = useState(false)
   const [errorMessage, setErrorMessage] = useState(null)
   const [orderCompleted, setOrderCompleted] = useState(false)
   const [input, setInput] = useState({
     name: "",
     email: "",
-    street: "",
+    line1: "",
+    line2: "",
     city: "",
     postal_code: "",
+    country: "",
     state: "",
   })
+  const [shippingCost, setShippingCost] = useState(0)
 
   const stripe = useStripe()
   const elements = useElements()
@@ -70,8 +88,9 @@ const Checkout = ({ context }) => {
 
   const handleSubmit = async event => {
     event.preventDefault()
-    const { name, email, street, city, postal_code, state } = input
-    const { total, clearCart } = context
+
+    const { name, email, line1, line2, city, postal_code, country, state } = input
+    const { cart, total, clearCart } = context
 
     if (!stripe || !elements) {
       // Stripe.js has not loaded yet. Make sure to disable
@@ -80,7 +99,7 @@ const Checkout = ({ context }) => {
     }
 
     // Validate input
-    if (!street || !city || !postal_code || !state) {
+    if (!line1 || !city || !postal_code || !country) {
       setErrorMessage("Please fill in the form!")
       return
     }
@@ -90,28 +109,72 @@ const Checkout = ({ context }) => {
     // each type of element.
     const cardElement = elements.getElement(CardElement)
 
-    // Use your card Element with other Stripe.js APIs
-    const { error, paymentMethod } = await stripe.createPaymentMethod({
-      type: "card",
-      card: cardElement,
-      billing_details: { name: name },
-    })
+    const address = {
+      city,
+      line1,
+      line2,
+      postal_code,
+      country,
+      state
+    }
+
+    let stripeClientSecret, error;
+
+    const orderItems = Array.from(cart.map(({name, price}) => ({sku: name, price, quantity: 0})));
+    cart.forEach(cartItem => orderItems.find(orderItem => orderItem.sku === cartItem.name).quantity++);
+
+    setInProgress(true)
+
+    const resp = await fetch(
+      `${backendUrl}/paymentintent`,
+      {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          total: total,
+          items: orderItems.filter(i => i.quantity),
+          country: address.country,
+          shippingCost
+        })
+      }
+    );
+
+    ({stripeClientSecret, error} = await resp.json())
 
     if (error) {
+      setInProgress(false)
       setErrorMessage(error.message)
       return
     }
 
-    const order = {
-      email,
-      amount: total,
-      address: state, // should this be {street, city, postal_code, state} ?
-      payment_method_id: paymentMethod.id,
-      receipt_email: "customer@example.com",
-      id: uuid(),
+    ({ error } = await stripe.confirmCardPayment(
+      stripeClientSecret,
+      {
+        payment_method: {
+          card: cardElement,
+          billing_details: {
+            name,
+            address
+          }
+        },
+        shipping: {
+          name,
+          address
+        },
+        receipt_email: email
+      }
+    ))
+
+    if (error) {
+      setInProgress(false)
+      setErrorMessage(error.message)
+      return
     }
-    console.log("order: ", order)
-    // TODO call API
+
+    setInProgress(false)
     setOrderCompleted(true)
     clearCart()
   }
@@ -156,7 +219,7 @@ const Checkout = ({ context }) => {
                     <div className="flex items-center">
                       <Image
                         className="w-32 m-0"
-                        src={item.image}
+                        src={item.image+'_w200.webp'}
                         alt={item.name}
                       />
                       <p className="m-0 pl-10 text-gray-600 text-sm">
@@ -176,7 +239,6 @@ const Checkout = ({ context }) => {
               <div className="flex flex-1 pt-8 flex-col">
                 <div className="mt-4 border-t pt-10">
                   <form onSubmit={handleSubmit}>
-                    {errorMessage ? <span>{errorMessage}</span> : ""}
                     <Input
                       onChange={onChange}
                       value={input.name}
@@ -192,9 +254,15 @@ const Checkout = ({ context }) => {
                     />
                     <Input
                       onChange={onChange}
-                      value={input.street}
-                      name="street"
-                      placeholder="Street"
+                      value={input.line1}
+                      name="line1"
+                      placeholder="Address Line 1"
+                    />
+                    <Input
+                      onChange={onChange}
+                      value={input.line2}
+                      name="line2"
+                      placeholder="Address Line 2 (optional)"
                     />
                     <Input
                       onChange={onChange}
@@ -202,11 +270,29 @@ const Checkout = ({ context }) => {
                       name="city"
                       placeholder="City"
                     />
+                    <CountryDropdown
+                      onChange={(country) => {
+                        setErrorMessage(null)
+                        setInput({ ...input, country })
+                        const {error, shippingCost} = calculateShippingCost({country, cart})
+                        if (error) {
+                          setErrorMessage(error.message)
+                          setShippingCost(0)
+                        } else {
+                          setShippingCost(shippingCost)
+                        }
+                      }}
+                      value={input.country}
+                      valueType="short"
+                      name="country"
+                      placeholder="Country"
+                      className="mt-2 text-sm shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    />
                     <Input
                       onChange={onChange}
                       value={input.state}
                       name="state"
-                      placeholder="State"
+                      placeholder="State (optional)"
                     />
                     <Input
                       onChange={onChange}
@@ -214,15 +300,6 @@ const Checkout = ({ context }) => {
                       name="postal_code"
                       placeholder="Postal Code"
                     />
-                    <button
-                      type="submit"
-                      disabled={!stripe}
-                      onClick={handleSubmit}
-                      className="hidden md:block bg-secondary hover:bg-black text-white font-bold py-2 px-4 mt-4 rounded focus:outline-none focus:shadow-outline"
-                      type="button"
-                    >
-                      Confirm order
-                    </button>
                   </form>
                 </div>
               </div>
@@ -236,22 +313,25 @@ const Checkout = ({ context }) => {
                 <div className="ml-4 pl-2 flex flex-1 justify-end pr-4">
                   <p className="text-sm pr-10">Shipping</p>
                   <p className="tracking-tighter w-38 flex justify-end">
-                    FREE SHIPPING
+                    {DENOMINATION + shippingCost}
                   </p>
                 </div>
-                <div className="md:ml-4 pl-2 flex flex-1 justify-end bg-gray-200 pr-4 pt-6">
+                <div className="ml-4 pl-2 flex flex-1 justify-end bg-gray-200 pr-4 pt-6">
                   <p className="text-sm pr-10">Total</p>
                   <p className="font-semibold tracking-tighter w-38 flex justify-end">
-                    {DENOMINATION + (total + calculateShipping())}
+                    {DENOMINATION + (total + shippingCost)}
                   </p>
                 </div>
+                {errorMessage && <Error message={errorMessage}/>}
                 <button
                   type="submit"
-                  disabled={!stripe}
+                  disabled={!stripe || inProgress || errorMessage}
                   onClick={handleSubmit}
-                  className="md:hidden bg-secondary hover:bg-black text-white font-bold py-2 px-4 mt-4 rounded focus:outline-none focus:shadow-outline"
-                  type="button"
+                  className={`${(!stripe || errorMessage) ? "bg-light " : "bg-secondary hover:bg-black "} text-white font-bold py-2 px-4 ml-4 mt-4 rounded focus:outline-none focus:shadow-outline`}
                 >
+                  {inProgress && 
+                    <span style={{display: 'inline-block', marginRight: '3px'}} className="animate-spin">↻</span>
+                  }
                   Confirm order
                 </button>
               </div>

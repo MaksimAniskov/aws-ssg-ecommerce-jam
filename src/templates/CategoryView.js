@@ -24,7 +24,7 @@ const CategoryView = (props) => {
                       link={slugify(item.name)}
                       title={item.name}
                       price={item.price}
-                      imageSrc={item.image}
+                      imageSrc={item.image+'_w130.webp'}
                     />
                   )
                 })

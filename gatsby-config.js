@@ -1,8 +1,11 @@
+const shopSettings = require('esm')(module)('./providers/shopSettingsProvider')
+
 module.exports = {
   siteMetadata: {
-    title: `Gatsby JAMstack ECommerce Professional`,
-    description: `Get up and running with your next E Commerce Website.`,
-    author: `@dabit3`,
+    shopName: shopSettings.name,
+    creditsHtml: shopSettings.creditsHtml,
+    title: shopSettings.meta.title,
+    description: shopSettings.meta.description
   },
   plugins: [
     {
@@ -23,6 +26,7 @@ module.exports = {
         },
       },
     },
+    `gatsby-plugin-preload-fonts`,
     {
       resolve: `gatsby-source-filesystem`,
       options: {
@@ -30,7 +34,6 @@ module.exports = {
         path: `${__dirname}/src/images`,
       },
     },
-    `gatsby-plugin-offline`,
     `gatsby-transformer-sharp`,
     `gatsby-plugin-sharp`,
     {
@@ -45,6 +48,15 @@ module.exports = {
         icon: `src/images/icon.png`, // This path is relative to the root of the site.
       },
     },
+    {
+      resolve: 'gatsby-plugin-static-folders',
+      options: {
+        folders: [
+          './static',
+          './optimized_images'
+        ]
+      }
+    }
     // this (optional) plugin enables Progressive Web App + Offline functionality
     // To learn more, visit: https://gatsby.dev/offline
     // `gatsby-plugin-offline`,

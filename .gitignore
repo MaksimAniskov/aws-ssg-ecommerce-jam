@@ -1,3 +1,8 @@
+optimized_images/
+shop
+settings.json
+deployment-package.zip
+
 # Logs
 logs
 *.log

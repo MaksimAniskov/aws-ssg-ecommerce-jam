@@ -1,4 +1,4 @@
-import getInventory from './providers/inventoryProvider.js'
+import getInventory from './providers/inventoryProvider'
 import { slugify } from './utils/helpers'
 
 const ItemView = require.resolve('./src/templates/ItemView')
@@ -7,17 +7,6 @@ const CategoryView = require.resolve('./src/templates/CategoryView')
 exports.createPages = async ({ graphql, actions }) => {
   const { createPage } = actions
   const inventory = await getInventory()
-
-  createPage({
-    path: 'all',
-    component: CategoryView,
-    context: {
-      content: inventory,
-      title: 'all',
-      type: "categoryPage"
-    },
-  })
-
 
   const inventoryByCategory = inventory.reduce((acc, next) => {
     const categories = next.categories
@@ -58,7 +47,7 @@ exports.createPages = async ({ graphql, actions }) => {
       path: slugify(item.name),
       component: ItemView,
       context: {
-        content: item,
+        content: {...item, imageSrc: item.image+'_w576.webp'},
         title: item.name,
         type: "itemPage",
         previous,
@@ -144,25 +133,47 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }) => 
   const catNode = Object.assign({}, catData, catNodeMeta)
   createNode(catNode)
 
-  /* all inventory */
-  const inventoryData = {
-    key: 'all-inventory',
-    data: inventory
+  /* storefront items */
+  const storefrontItemsData = {
+    key: 'inventory-storefront',
+    data: inventory.filter(item => item.storefront)
   }
 
-  const inventoryNodeContent = JSON.stringify(inventoryData)
-  const inventoryNodeMeta = {
-    id: createNodeId(`my-data-${inventoryData.key}`),
+  const storefrontItemsNodeContent = JSON.stringify(storefrontItemsData)
+  const storefrontItemsNodeMeta = {
+    id: createNodeId(`my-data-${storefrontItemsData.key}`),
     parent: null,
     children: [],
     internal: {
-      type: `InventoryInfo`,
+      type: `StorefrontItems`,
       mediaType: `json`,
-      content: inventoryNodeContent,
-      contentDigest: createContentDigest(inventoryData)
+      content: storefrontItemsNodeContent,
+      contentDigest: createContentDigest(storefrontItemsData)
     }
   }
 
-  const inventoryNode = Object.assign({}, inventoryData, inventoryNodeMeta)
-  createNode(inventoryNode)
+  const storefrontItemsNode = Object.assign({}, storefrontItemsData, storefrontItemsNodeMeta)
+  createNode(storefrontItemsNode)
+
+  /* featured items */
+  const featuredItemsData = {
+    key: 'inventory-featured',
+    data: inventory.filter(item => item.featured)
+  }
+
+  const featuredItemsNodeContent = JSON.stringify(featuredItemsData)
+  const featuredItemsNodeMeta = {
+    id: createNodeId(`my-data-${featuredItemsData.key}`),
+    parent: null,
+    children: [],
+    internal: {
+      type: `FeaturedItems`,
+      mediaType: `json`,
+      content: featuredItemsNodeContent,
+      contentDigest: createContentDigest(featuredItemsData)
+    }
+  }
+
+  const featuredItemsNode = Object.assign({}, featuredItemsData, featuredItemsNodeMeta)
+  createNode(featuredItemsNode)
 }
